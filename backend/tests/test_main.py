@@ -5,10 +5,8 @@ from unittest.mock import patch, MagicMock
 import os
 import sys
 
-# Add the parent directory to the path to allow imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# Set environment variables for tests
 os.environ['GA_PROPERTY_ID'] = 'test_property_id'
 os.environ['SERVICE_ACCOUNT_FILE'] = 'test_service_account.json'
 
