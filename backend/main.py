@@ -30,23 +30,55 @@ def get_ga_client():
     return BetaAnalyticsDataClient(credentials=credentials)
 
 # レスポンスモデルの定義
-class AnalyticsData(BaseModel):
+class ActiveUsersData(BaseModel):
     date: str
-    active_users: int
+    active7DayUsers: int
+    active28DayUsers: int
 
-class AnalyticsResponse(BaseModel):
+class ActiveUsersStats(BaseModel):
+    total_active7DayUsers: int
+    total_active28DayUsers: int
+    avg_active7DayUsers: float
+    avg_active28DayUsers: float
+
+class ActiveUsersResponse(BaseModel):
     start_date: str
     end_date: str
     property_id: str
-    data: list[AnalyticsData]
+    data: list[ActiveUsersData]
+    stats: ActiveUsersStats
 
-@app.get("/api/v1/active-users", response_model=AnalyticsResponse)
+def fetch_ga_metrics(
+    client,
+    property_id: str,
+    start_date: str,
+    end_date: str,
+    metrics: list[str]
+):
+    """指定した指標のデータを日別で取得（将来の拡張も考慮）"""
+    request = RunReportRequest(
+        property=f"properties/{property_id}",
+        dimensions=[Dimension(name="date")],
+        metrics=[Metric(name=m) for m in metrics],
+        date_ranges=[DateRange(start_date=start_date, end_date=end_date)],
+    )
+    response = client.run_report(request)
+    results = []
+    for row in response.rows:
+        row_data = {"date": datetime.strptime(row.dimension_values[0].value, "%Y%m%d").strftime("%Y-%m-%d")}
+        for idx, m in enumerate(metrics):
+            row_data[m] = int(row.metric_values[idx].value)
+        results.append(row_data)
+    results.sort(key=lambda x: x["date"])
+    return results
+
+@app.get("/api/v1/active-users", response_model=ActiveUsersResponse)
 def get_active_users(
     start_date: str = Query(..., description="開始日 (YYYY-MM-DD)", pattern=r"^\d{4}-\d{2}-\d{2}$"),
     end_date: str = Query(..., description="終了日 (YYYY-MM-DD)", pattern=r"^\d{4}-\d{2}-\d{2}$")
 ):
     """
-    指定された期間のアクティブユーザー数をGoogle Analytics Data APIから取得します。
+    指定された期間の日別active7DayUsers/active28DayUsersをGoogle Analytics Data APIから取得します。
     """
     try:
         start_dt = datetime.strptime(start_date, "%Y-%m-%d")
@@ -56,37 +88,41 @@ def get_active_users(
 
     if start_dt > end_dt:
         raise HTTPException(status_code=400, detail="start_date must be before end_date")
-    
     if not GA_PROPERTY_ID:
         raise HTTPException(status_code=500, detail="GA_PROPERTY_IDが設定されていません。")
 
     try:
         client = get_ga_client()
-        request = RunReportRequest(
-            property=f"properties/{GA_PROPERTY_ID}",
-            dimensions=[Dimension(name="date")],
-            metrics=[Metric(name="activeUsers")],
-            date_ranges=[DateRange(start_date=start_date, end_date=end_date)],
-        )
-        response = client.run_report(request)
+        metrics = ["active7DayUsers", "active28DayUsers"]
+        rows = fetch_ga_metrics(client, GA_PROPERTY_ID, start_date, end_date, metrics)
 
         data = []
-        for row in response.rows:
-            data.append(
-                AnalyticsData(
-                    date=datetime.strptime(row.dimension_values[0].value, "%Y%m%d").strftime("%Y-%m-%d"),
-                    active_users=int(row.metric_values[0].value)
-                )
+        total_7 = 0
+        total_28 = 0
+        for row in rows:
+            d = ActiveUsersData(
+                date=row["date"],
+                active7DayUsers=row.get("active7DayUsers", 0),
+                active28DayUsers=row.get("active28DayUsers", 0)
             )
-        
-        # 日付でソート
-        data.sort(key=lambda x: x.date)
+            data.append(d)
+            total_7 += d.active7DayUsers
+            total_28 += d.active28DayUsers
 
-        return AnalyticsResponse(
+        count = len(data)
+        stats = ActiveUsersStats(
+            total_active7DayUsers=total_7,
+            total_active28DayUsers=total_28,
+            avg_active7DayUsers=round(total_7 / count, 2) if count else 0,
+            avg_active28DayUsers=round(total_28 / count, 2) if count else 0
+        )
+
+        return ActiveUsersResponse(
             start_date=start_date,
             end_date=end_date,
             property_id=GA_PROPERTY_ID,
-            data=data
+            data=data,
+            stats=stats
         )
 
     except FileNotFoundError as e:
@@ -94,6 +130,5 @@ def get_active_users(
     except ValueError as e:
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
-        # Google APIからのエラーなど、その他の予期せぬエラー
         raise HTTPException(status_code=500, detail=f"Error fetching data from Google Analytics: {e}")
 

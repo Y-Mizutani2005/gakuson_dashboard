@@ -6,66 +6,180 @@ from datetime import date, timedelta
 # バックエンドAPIのURL
 BACKEND_URL = "http://127.0.0.1:8000/api/v1/active-users"
 
-# StreamlitアプリのUI設定
 st.set_page_config(page_title="GA4 アクティブユーザー数ダッシュボード", layout="wide")
-
 st.title("GA4 アクティブユーザー数ダッシュボード")
 
-# 期間指定UI
-st.sidebar.header("期間を選択")
+st.sidebar.header("比較する2つの期間を選択")
 
-# デフォルトの日付を設定（昨日から遡って8日間）
 today = date.today()
-end_date_default = today - timedelta(days=1)
-start_date_default = end_date_default - timedelta(days=7)
+# デフォルト値
+default1_end = today - timedelta(days=1)
+default1_start = default1_end - timedelta(days=6)
+default2_end = default1_start - timedelta(days=1)
+default2_start = default2_end - timedelta(days=6)
 
-start_date = st.sidebar.date_input("開始日", start_date_default)
-end_date = st.sidebar.date_input("終了日", end_date_default)
+# 週/月切替
+input_mode = st.sidebar.selectbox("集計単位", ["週", "月"], key="input_mode")
 
-if st.sidebar.button("表示"):
-    if start_date > end_date:
-        st.error("エラー: 開始日は終了日より前に設定してください。")
-    else:
-        with st.spinner('データを取得しています...'):
-            try:
-                # バックエンドAPIにリクエストを送信
-                params = {
-                    'start_date': start_date.strftime('%Y-%m-%d'),
-                    'end_date': end_date.strftime('%Y-%m-%d')
-                }
-                response = requests.get(BACKEND_URL, params=params)
-                response.raise_for_status()  # HTTPエラーがあれば例外を発生させる
+def week_ui_and_logic():
+    st.sidebar.subheader("週単位の比較対象日を選択")
+    week_selected_date1 = st.sidebar.date_input("期間1の基準日（週）", value=default1_end, key="week_date1_only")
+    week_selected_date2 = st.sidebar.date_input("期間2の基準日（週）", value=default2_end, key="week_date2_only")
 
-                api_response = response.json()
-                data = api_response.get("data", [])
+    def week_period(selected_date):
+        start_date = selected_date - timedelta(days=6)
+        end_date = selected_date
+        return start_date, end_date
 
-                if data:
-                    df = pd.DataFrame(data)
-                    df['date'] = pd.to_datetime(df['date'])
-                    df.set_index('date', inplace=True)
+    week_start_date1, week_end_date1 = week_period(week_selected_date1)
+    week_start_date2, week_end_date2 = week_period(week_selected_date2)
 
-                    # 合計と平均を計算
-                    total_users = df['active_users'].sum()
-                    avg_users = df['active_users'].mean()
+    if st.sidebar.button("週データ表示", key="week_button_only"):
+        if week_start_date1 > week_end_date1 or week_start_date2 > week_end_date2:
+            st.error("エラー: 期間の開始日は終了日より前に設定してください。")
+        else:
+            with st.spinner('週データを取得しています...'):
+                try:
+                    # 期間1データ取得
+                    params1 = {
+                        'start_date': week_start_date1.strftime('%Y-%m-%d'),
+                        'end_date': week_end_date1.strftime('%Y-%m-%d')
+                    }
+                    resp1 = requests.get(BACKEND_URL, params=params1)
+                    resp1.raise_for_status()
+                    data1 = resp1.json()
 
-                    st.header(f"{start_date} から {end_date} のアクティブユーザー数")
+                    # 期間2データ取得
+                    params2 = {
+                        'start_date': week_start_date2.strftime('%Y-%m-%d'),
+                        'end_date': week_end_date2.strftime('%Y-%m-%d')
+                    }
+                    resp2 = requests.get(BACKEND_URL, params=params2)
+                    resp2.raise_for_status()
+                    data2 = resp2.json()
 
-                    # メトリクスを表示
-                    col1, col2 = st.columns(2)
-                    col1.metric("合計アクティブユーザー数", f"{total_users:,}")
-                    col2.metric("平均アクティブユーザー数", f"{avg_users:,.2f}")
+                    # DataFrame変換
+                    week_df1 = pd.DataFrame(data1.get("data", []))
+                    week_df2 = pd.DataFrame(data2.get("data", []))
 
-                    # 折れ線グラフを表示
-                    st.line_chart(df['active_users'])
-                    
-                    # 生データを表示（任意）
-                    with st.expander("生データを表示"):
-                        st.dataframe(df)
+                    if week_df1.empty or week_df2.empty:
+                        st.warning("いずれかの週期間でデータが見つかりませんでした。")
+                    else:
+                        for df in [week_df1, week_df2]:
+                            df['date'] = pd.to_datetime(df['date'])
+                            df.set_index('date', inplace=True)
 
-                else:
-                    st.warning("指定された期間のデータが見つかりませんでした。")
+                        st.header("アクティブユーザー数（7日）週比較")
 
-            except requests.exceptions.RequestException as e:
-                st.error(f"バックエンドへの接続に失敗しました: {e}")
-            except Exception as e:
-                st.error(f"エラーが発生しました: {e}")
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.subheader(f"期間1: {week_start_date1} ～ {week_end_date1}")
+                            st.metric("平均(7日)", f"{data1['stats']['avg_active7DayUsers']:,}")
+                            st.line_chart(week_df1[["active7DayUsers"]])
+
+                        with col2:
+                            st.subheader(f"期間2: {week_start_date2} ～ {week_end_date2}")
+                            st.metric("平均(7日)", f"{data2['stats']['avg_active7DayUsers']:,}")
+                            st.line_chart(week_df2[["active7DayUsers"]])
+
+                        # 差分・比率表示
+                        st.subheader("2週期間の比較")
+                        diff_7 = data1['stats']['total_active7DayUsers'] - data2['stats']['total_active7DayUsers']
+                        ratio_7 = (data1['stats']['total_active7DayUsers'] / data2['stats']['total_active7DayUsers'] * 100) if data2['stats']['total_active7DayUsers'] else 0
+
+                        st.write(f"7日ユーザー数差分: {diff_7:+,}　（期間1 - 期間2）")
+                        st.write(f"7日ユーザー数比率: {ratio_7:.2f}%")
+
+                        with st.expander("期間1週データ"):
+                            st.dataframe(week_df1)
+                        with st.expander("期間2週データ"):
+                            st.dataframe(week_df2)
+
+                except requests.exceptions.RequestException as e:
+                    st.error(f"バックエンドへの接続に失敗しました: {e}")
+                except Exception as e:
+                    st.error(f"エラーが発生しました: {e}")
+
+def month_ui_and_logic():
+    st.sidebar.subheader("月単位の比較対象日を選択")
+    month_selected_date1 = st.sidebar.date_input("期間1の基準日（月）", value=default1_end, key="month_date1_only")
+    month_selected_date2 = st.sidebar.date_input("期間2の基準日（月）", value=default2_end, key="month_date2_only")
+
+    def month_period(selected_date):
+        start_date = selected_date - timedelta(days=27)
+        end_date = selected_date
+        return start_date, end_date
+
+    month_start_date1, month_end_date1 = month_period(month_selected_date1)
+    month_start_date2, month_end_date2 = month_period(month_selected_date2)
+
+    if st.sidebar.button("月データ表示", key="month_button_only"):
+        if month_start_date1 > month_end_date1 or month_start_date2 > month_end_date2:
+            st.error("エラー: 期間の開始日は終了日より前に設定してください。")
+        else:
+            with st.spinner('月データを取得しています...'):
+                try:
+                    # 期間1データ取得
+                    params1 = {
+                        'start_date': month_start_date1.strftime('%Y-%m-%d'),
+                        'end_date': month_end_date1.strftime('%Y-%m-%d')
+                    }
+                    resp1 = requests.get(BACKEND_URL, params=params1)
+                    resp1.raise_for_status()
+                    data1 = resp1.json()
+
+                    # 期間2データ取得
+                    params2 = {
+                        'start_date': month_start_date2.strftime('%Y-%m-%d'),
+                        'end_date': month_end_date2.strftime('%Y-%m-%d')
+                    }
+                    resp2 = requests.get(BACKEND_URL, params=params2)
+                    resp2.raise_for_status()
+                    data2 = resp2.json()
+
+                    # DataFrame変換
+                    month_df1 = pd.DataFrame(data1.get("data", []))
+                    month_df2 = pd.DataFrame(data2.get("data", []))
+
+                    if month_df1.empty or month_df2.empty:
+                        st.warning("いずれかの月期間でデータが見つかりませんでした。")
+                    else:
+                        for df in [month_df1, month_df2]:
+                            df['date'] = pd.to_datetime(df['date'])
+                            df.set_index('date', inplace=True)
+
+                        st.header("アクティブユーザー数月間（28日）比較")
+
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.subheader(f"期間1: {month_start_date1} ～ {month_end_date1}")
+                            st.metric("平均(28日)", f"{data1['stats']['avg_active28DayUsers']:,}")
+                            st.line_chart(month_df1[["active28DayUsers"]])
+
+                        with col2:
+                            st.subheader(f"期間2: {month_start_date2} ～ {month_end_date2}")
+                            st.metric("平均(28日)", f"{data2['stats']['avg_active28DayUsers']:,}")
+                            st.line_chart(month_df2[[ "active28DayUsers"]])
+
+                        # 差分・比率表示
+                        st.subheader("2月期間の比較")
+                        diff_28 = data1['stats']['total_active28DayUsers'] - data2['stats']['total_active28DayUsers']
+                        ratio_28 = (data1['stats']['total_active28DayUsers'] / data2['stats']['total_active28DayUsers'] * 100) if data2['stats']['total_active28DayUsers'] else 0
+
+                        st.write(f"28日ユーザー数差分: {diff_28:+,}　（期間1 - 期間2）")
+                        st.write(f"28日ユーザー数比率: {ratio_28:.2f}%")
+
+                        with st.expander("期間1月データ"):
+                            st.dataframe(month_df1)
+                        with st.expander("期間2月データ"):
+                            st.dataframe(month_df2)
+
+                except requests.exceptions.RequestException as e:
+                    st.error(f"バックエンドへの接続に失敗しました: {e}")
+                except Exception as e:
+                    st.error(f"エラーが発生しました: {e}")
+
+if input_mode == "週":
+    week_ui_and_logic()
+elif input_mode == "月":
+    month_ui_and_logic()
