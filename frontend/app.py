@@ -28,8 +28,8 @@ metric_mode = st.sidebar.radio("表示指標", ["アクティブユーザー", "
 
 def week_ui_and_logic():
     st.sidebar.subheader("週単位の比較対象日を選択")
-    week_selected_date1 = st.sidebar.date_input("期間1の基準日（週）", value=default1_end, key="week_date1_only")
-    week_selected_date2 = st.sidebar.date_input("期間2の基準日（週）", value=default2_end, key="week_date2_only")
+    week_selected_date1 = st.sidebar.date_input("期間1の基準日（基準日から1週間）", value=default1_end, key="week_date1_only")
+    week_selected_date2 = st.sidebar.date_input("期間2の基準日（基準日から1週間）", value=default2_end, key="week_date2_only")
 
     def week_period(selected_date):
         start_date = selected_date
@@ -40,8 +40,8 @@ def week_ui_and_logic():
     week_start_date2, week_end_date2 = week_period(week_selected_date2)
 
     if st.sidebar.button("週データ表示", key="week_button_only"):
-        if week_start_date1 > week_end_date1 or week_start_date2 > week_end_date2:
-            st.error("エラー: 期間の開始日は終了日より前に設定してください。")
+        if week_end_date1 > today or week_end_date2 > today:
+            st.error("エラー: 終了日が未来の日付です。本日以前を選択してください。")
         else:
             with st.spinner('週データを取得しています...'):
                 try:
@@ -93,11 +93,6 @@ def week_ui_and_logic():
                             st.write(f"7日ユーザー数差分: {diff_7:+,}　（期間1 - 期間2）")
                             st.write(f"7日ユーザー数比率: {ratio_7:.2f}%")
 
-                            with st.expander("期間1週データ"):
-                                st.dataframe(week_df1)
-                            with st.expander("期間2週データ"):
-                                st.dataframe(week_df2)
-
                     elif metric_mode == "表示回数":
                         resp1 = requests.get(PAGE_VIEW_URL, params=params1)
                         resp1.raise_for_status()
@@ -137,11 +132,6 @@ def week_ui_and_logic():
                             st.write(f"表示回数差分: {diff_views:+,}　（期間1 - 期間2）")
                             st.write(f"表示回数比率: {ratio_views:.2f}%")
 
-                            with st.expander("期間1週データ"):
-                                st.dataframe(week_df1)
-                            with st.expander("期間2週データ"):
-                                st.dataframe(week_df2)
-
                 except requests.exceptions.RequestException as e:
                     st.error(f"バックエンドへの接続に失敗しました: {e}")
                 except Exception as e:
@@ -149,8 +139,8 @@ def week_ui_and_logic():
 
 def month_ui_and_logic():
     st.sidebar.subheader("月単位の比較対象日を選択")
-    month_selected_date1 = st.sidebar.date_input("期間1の基準日（月）", value=default1_end, key="month_date1_only")
-    month_selected_date2 = st.sidebar.date_input("期間2の基準日（月）", value=default2_end, key="month_date2_only")
+    month_selected_date1 = st.sidebar.date_input("期間1の基準日（基準日から1ヶ月）", value=default1_end, key="month_date1_only")
+    month_selected_date2 = st.sidebar.date_input("期間2の基準日（基準日から1ヶ月）", value=default2_end, key="month_date2_only")
 
     def month_period(selected_date):
         start_date = selected_date - timedelta(days=27)
@@ -161,8 +151,8 @@ def month_ui_and_logic():
     month_start_date2, month_end_date2 = month_period(month_selected_date2)
 
     if st.sidebar.button("月データ表示", key="month_button_only"):
-        if month_start_date1 > month_end_date1 or month_start_date2 > month_end_date2:
-            st.error("エラー: 期間の開始日は終了日より前に設定してください。")
+        if month_end_date1 > today or month_end_date2 > today:
+            st.error("エラー: 終了日が未来の日付です。本日以前を選択してください。")
         else:
             with st.spinner('月データを取得しています...'):
                 try:
@@ -214,11 +204,6 @@ def month_ui_and_logic():
                             st.write(f"28日ユーザー数差分: {diff_28:+,}　（期間1 - 期間2）")
                             st.write(f"28日ユーザー数比率: {ratio_28:.2f}%")
 
-                            with st.expander("期間1月データ"):
-                                st.dataframe(month_df1)
-                            with st.expander("期間2月データ"):
-                                st.dataframe(month_df2)
-
                     elif metric_mode == "表示回数":
                         resp1 = requests.get(PAGE_VIEW_URL, params=params1)
                         resp1.raise_for_status()
@@ -257,11 +242,6 @@ def month_ui_and_logic():
 
                             st.write(f"表示回数差分: {diff_views:+,}　（期間1 - 期間2）")
                             st.write(f"表示回数比率: {ratio_views:.2f}%")
-
-                            with st.expander("期間1月データ"):
-                                st.dataframe(month_df1)
-                            with st.expander("期間2月データ"):
-                                st.dataframe(month_df2)
 
                 except requests.exceptions.RequestException as e:
                     st.error(f"バックエンドへの接続に失敗しました: {e}")
