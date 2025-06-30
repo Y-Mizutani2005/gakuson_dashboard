@@ -131,4 +131,60 @@ def get_active_users(
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching data from Google Analytics: {e}")
+# 表示回数取得用レスポンスモデル
+class PageViewsData(BaseModel):
+    date: str
+    pageViews: int
+
+class PageViewsResponse(BaseModel):
+    start_date: str
+    end_date: str
+    property_id: str
+    data: list[PageViewsData]
+
+@app.get("/api/v1/page-views", response_model=PageViewsResponse)
+def get_page_views(
+    start_date: str = Query(..., description="開始日 (YYYY-MM-DD)", pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    end_date: str = Query(..., description="終了日 (YYYY-MM-DD)", pattern=r"^\d{4}-\d{2}-\d{2}$")
+):
+    """
+    指定された期間の日別pageViews（表示回数）をGoogle Analytics Data APIから取得します。
+    """
+    try:
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="日付のフォーマットが不正です。YYYY-MM-DD形式で指定してください。")
+
+    if start_dt > end_dt:
+        raise HTTPException(status_code=400, detail="start_date must be before end_date")
+    if not GA_PROPERTY_ID:
+        raise HTTPException(status_code=500, detail="GA_PROPERTY_IDが設定されていません。")
+
+    try:
+        client = get_ga_client()
+        metrics = ["screenPageViews"]  # GA4ではpageViews→screenPageViews
+        rows = fetch_ga_metrics(client, GA_PROPERTY_ID, start_date, end_date, metrics)
+
+        data = []
+        for row in rows:
+            d = PageViewsData(
+                date=row["date"],
+                pageViews=row.get("screenPageViews", 0)
+            )
+            data.append(d)
+
+        return PageViewsResponse(
+            start_date=start_date,
+            end_date=end_date,
+            property_id=GA_PROPERTY_ID,
+            data=data
+        )
+
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching data from Google Analytics: {e}")
 

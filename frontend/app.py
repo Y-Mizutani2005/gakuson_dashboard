@@ -6,6 +6,8 @@ from datetime import date, timedelta
 # バックエンドAPIのURL
 BACKEND_URL = "http://127.0.0.1:8000/api/v1/active-users"
 
+PAGE_VIEW_URL = "http://127.0.0.1:8000/api/v1/page-views"
+
 st.set_page_config(page_title="GA4 アクティブユーザー数ダッシュボード", layout="wide")
 st.title("GA4 アクティブユーザー数ダッシュボード")
 
@@ -20,6 +22,9 @@ default2_start = default2_end - timedelta(days=6)
 
 # 週/月切替
 input_mode = st.sidebar.selectbox("集計単位", ["週", "月"], key="input_mode")
+
+# 指標切替（表示回数 or アクティブユーザー）
+metric_mode = st.sidebar.radio("表示指標", ["アクティブユーザー", "表示回数"], key="metric_mode")
 
 def week_ui_and_logic():
     st.sidebar.subheader("週単位の比較対象日を選択")
@@ -40,60 +45,102 @@ def week_ui_and_logic():
         else:
             with st.spinner('週データを取得しています...'):
                 try:
-                    # 期間1データ取得
                     params1 = {
                         'start_date': week_start_date1.strftime('%Y-%m-%d'),
                         'end_date': week_end_date1.strftime('%Y-%m-%d')
                     }
-                    resp1 = requests.get(BACKEND_URL, params=params1)
-                    resp1.raise_for_status()
-                    data1 = resp1.json()
-
-                    # 期間2データ取得
                     params2 = {
                         'start_date': week_start_date2.strftime('%Y-%m-%d'),
                         'end_date': week_end_date2.strftime('%Y-%m-%d')
                     }
-                    resp2 = requests.get(BACKEND_URL, params=params2)
-                    resp2.raise_for_status()
-                    data2 = resp2.json()
 
-                    # DataFrame変換
-                    week_df1 = pd.DataFrame(data1.get("data", []))
-                    week_df2 = pd.DataFrame(data2.get("data", []))
+                    if metric_mode == "アクティブユーザー":
+                        resp1 = requests.get(BACKEND_URL, params=params1)
+                        resp1.raise_for_status()
+                        data1 = resp1.json()
 
-                    if week_df1.empty or week_df2.empty:
-                        st.warning("いずれかの週期間でデータが見つかりませんでした。")
-                    else:
-                        for df in [week_df1, week_df2]:
-                            df['date'] = pd.to_datetime(df['date'])
-                            df.set_index('date', inplace=True)
+                        resp2 = requests.get(BACKEND_URL, params=params2)
+                        resp2.raise_for_status()
+                        data2 = resp2.json()
 
-                        st.header("アクティブユーザー数（7日）週比較")
+                        week_df1 = pd.DataFrame(data1.get("data", []))
+                        week_df2 = pd.DataFrame(data2.get("data", []))
 
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.subheader(f"期間1: {week_start_date1} ～ {week_end_date1}")
-                            st.metric("平均(7日)", f"{data1['stats']['avg_active7DayUsers']:,}")
-                            st.line_chart(week_df1[["active7DayUsers"]])
+                        if week_df1.empty or week_df2.empty:
+                            st.warning("いずれかの週期間でデータが見つかりませんでした。")
+                        else:
+                            for df in [week_df1, week_df2]:
+                                df['date'] = pd.to_datetime(df['date'])
+                                df.set_index('date', inplace=True)
 
-                        with col2:
-                            st.subheader(f"期間2: {week_start_date2} ～ {week_end_date2}")
-                            st.metric("平均(7日)", f"{data2['stats']['avg_active7DayUsers']:,}")
-                            st.line_chart(week_df2[["active7DayUsers"]])
+                            st.header("アクティブユーザー数（7日）週比較")
 
-                        # 差分・比率表示
-                        st.subheader("2週期間の比較")
-                        diff_7 = data1['stats']['total_active7DayUsers'] - data2['stats']['total_active7DayUsers']
-                        ratio_7 = (data1['stats']['total_active7DayUsers'] / data2['stats']['total_active7DayUsers'] * 100) if data2['stats']['total_active7DayUsers'] else 0
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.subheader(f"期間1: {week_start_date1} ～ {week_end_date1}")
+                                st.metric("平均(7日)", f"{data1['stats']['avg_active7DayUsers']:,}")
+                                st.line_chart(week_df1[["active7DayUsers"]])
 
-                        st.write(f"7日ユーザー数差分: {diff_7:+,}　（期間1 - 期間2）")
-                        st.write(f"7日ユーザー数比率: {ratio_7:.2f}%")
+                            with col2:
+                                st.subheader(f"期間2: {week_start_date2} ～ {week_end_date2}")
+                                st.metric("平均(7日)", f"{data2['stats']['avg_active7DayUsers']:,}")
+                                st.line_chart(week_df2[["active7DayUsers"]])
 
-                        with st.expander("期間1週データ"):
-                            st.dataframe(week_df1)
-                        with st.expander("期間2週データ"):
-                            st.dataframe(week_df2)
+                            st.subheader("2週期間の比較")
+                            diff_7 = data1['stats']['total_active7DayUsers'] - data2['stats']['total_active7DayUsers']
+                            ratio_7 = (data1['stats']['total_active7DayUsers'] / data2['stats']['total_active7DayUsers'] * 100) if data2['stats']['total_active7DayUsers'] else 0
+
+                            st.write(f"7日ユーザー数差分: {diff_7:+,}　（期間1 - 期間2）")
+                            st.write(f"7日ユーザー数比率: {ratio_7:.2f}%")
+
+                            with st.expander("期間1週データ"):
+                                st.dataframe(week_df1)
+                            with st.expander("期間2週データ"):
+                                st.dataframe(week_df2)
+
+                    elif metric_mode == "表示回数":
+                        resp1 = requests.get(PAGE_VIEW_URL, params=params1)
+                        resp1.raise_for_status()
+                        data1 = resp1.json()
+
+                        resp2 = requests.get(PAGE_VIEW_URL, params=params2)
+                        resp2.raise_for_status()
+                        data2 = resp2.json()
+
+                        week_df1 = pd.DataFrame(data1.get("data", []))
+                        week_df2 = pd.DataFrame(data2.get("data", []))
+
+                        if week_df1.empty or week_df2.empty:
+                            st.warning("いずれかの週期間でデータが見つかりませんでした。")
+                        else:
+                            for df in [week_df1, week_df2]:
+                                df['date'] = pd.to_datetime(df['date'])
+                                df.set_index('date', inplace=True)
+
+                            st.header("表示回数（screenPageViews）週比較")
+
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.subheader(f"期間1: {week_start_date1} ～ {week_end_date1}")
+                                st.metric("合計表示回数", f"{week_df1['pageViews'].sum():,}")
+                                st.line_chart(week_df1[["pageViews"]])
+
+                            with col2:
+                                st.subheader(f"期間2: {week_start_date2} ～ {week_end_date2}")
+                                st.metric("合計表示回数", f"{week_df2['pageViews'].sum():,}")
+                                st.line_chart(week_df2[["pageViews"]])
+
+                            st.subheader("2週期間の比較")
+                            diff_views = week_df1['pageViews'].sum() - week_df2['pageViews'].sum()
+                            ratio_views = (week_df1['pageViews'].sum() / week_df2['pageViews'].sum() * 100) if week_df2['pageViews'].sum() else 0
+
+                            st.write(f"表示回数差分: {diff_views:+,}　（期間1 - 期間2）")
+                            st.write(f"表示回数比率: {ratio_views:.2f}%")
+
+                            with st.expander("期間1週データ"):
+                                st.dataframe(week_df1)
+                            with st.expander("期間2週データ"):
+                                st.dataframe(week_df2)
 
                 except requests.exceptions.RequestException as e:
                     st.error(f"バックエンドへの接続に失敗しました: {e}")
@@ -119,60 +166,102 @@ def month_ui_and_logic():
         else:
             with st.spinner('月データを取得しています...'):
                 try:
-                    # 期間1データ取得
                     params1 = {
                         'start_date': month_start_date1.strftime('%Y-%m-%d'),
                         'end_date': month_end_date1.strftime('%Y-%m-%d')
                     }
-                    resp1 = requests.get(BACKEND_URL, params=params1)
-                    resp1.raise_for_status()
-                    data1 = resp1.json()
-
-                    # 期間2データ取得
                     params2 = {
                         'start_date': month_start_date2.strftime('%Y-%m-%d'),
                         'end_date': month_end_date2.strftime('%Y-%m-%d')
                     }
-                    resp2 = requests.get(BACKEND_URL, params=params2)
-                    resp2.raise_for_status()
-                    data2 = resp2.json()
 
-                    # DataFrame変換
-                    month_df1 = pd.DataFrame(data1.get("data", []))
-                    month_df2 = pd.DataFrame(data2.get("data", []))
+                    if metric_mode == "アクティブユーザー":
+                        resp1 = requests.get(BACKEND_URL, params=params1)
+                        resp1.raise_for_status()
+                        data1 = resp1.json()
 
-                    if month_df1.empty or month_df2.empty:
-                        st.warning("いずれかの月期間でデータが見つかりませんでした。")
-                    else:
-                        for df in [month_df1, month_df2]:
-                            df['date'] = pd.to_datetime(df['date'])
-                            df.set_index('date', inplace=True)
+                        resp2 = requests.get(BACKEND_URL, params=params2)
+                        resp2.raise_for_status()
+                        data2 = resp2.json()
 
-                        st.header("アクティブユーザー数月間（28日）比較")
+                        month_df1 = pd.DataFrame(data1.get("data", []))
+                        month_df2 = pd.DataFrame(data2.get("data", []))
 
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.subheader(f"期間1: {month_start_date1} ～ {month_end_date1}")
-                            st.metric("平均(28日)", f"{data1['stats']['avg_active28DayUsers']:,}")
-                            st.line_chart(month_df1[["active28DayUsers"]])
+                        if month_df1.empty or month_df2.empty:
+                            st.warning("いずれかの月期間でデータが見つかりませんでした。")
+                        else:
+                            for df in [month_df1, month_df2]:
+                                df['date'] = pd.to_datetime(df['date'])
+                                df.set_index('date', inplace=True)
 
-                        with col2:
-                            st.subheader(f"期間2: {month_start_date2} ～ {month_end_date2}")
-                            st.metric("平均(28日)", f"{data2['stats']['avg_active28DayUsers']:,}")
-                            st.line_chart(month_df2[[ "active28DayUsers"]])
+                            st.header("アクティブユーザー数月間（28日）比較")
 
-                        # 差分・比率表示
-                        st.subheader("2月期間の比較")
-                        diff_28 = data1['stats']['total_active28DayUsers'] - data2['stats']['total_active28DayUsers']
-                        ratio_28 = (data1['stats']['total_active28DayUsers'] / data2['stats']['total_active28DayUsers'] * 100) if data2['stats']['total_active28DayUsers'] else 0
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.subheader(f"期間1: {month_start_date1} ～ {month_end_date1}")
+                                st.metric("平均(28日)", f"{data1['stats']['avg_active28DayUsers']:,}")
+                                st.line_chart(month_df1[["active28DayUsers"]])
 
-                        st.write(f"28日ユーザー数差分: {diff_28:+,}　（期間1 - 期間2）")
-                        st.write(f"28日ユーザー数比率: {ratio_28:.2f}%")
+                            with col2:
+                                st.subheader(f"期間2: {month_start_date2} ～ {month_end_date2}")
+                                st.metric("平均(28日)", f"{data2['stats']['avg_active28DayUsers']:,}")
+                                st.line_chart(month_df2[[ "active28DayUsers"]])
 
-                        with st.expander("期間1月データ"):
-                            st.dataframe(month_df1)
-                        with st.expander("期間2月データ"):
-                            st.dataframe(month_df2)
+                            st.subheader("2月期間の比較")
+                            diff_28 = data1['stats']['total_active28DayUsers'] - data2['stats']['total_active28DayUsers']
+                            ratio_28 = (data1['stats']['total_active28DayUsers'] / data2['stats']['total_active28DayUsers'] * 100) if data2['stats']['total_active28DayUsers'] else 0
+
+                            st.write(f"28日ユーザー数差分: {diff_28:+,}　（期間1 - 期間2）")
+                            st.write(f"28日ユーザー数比率: {ratio_28:.2f}%")
+
+                            with st.expander("期間1月データ"):
+                                st.dataframe(month_df1)
+                            with st.expander("期間2月データ"):
+                                st.dataframe(month_df2)
+
+                    elif metric_mode == "表示回数":
+                        resp1 = requests.get(PAGE_VIEW_URL, params=params1)
+                        resp1.raise_for_status()
+                        data1 = resp1.json()
+
+                        resp2 = requests.get(PAGE_VIEW_URL, params=params2)
+                        resp2.raise_for_status()
+                        data2 = resp2.json()
+
+                        month_df1 = pd.DataFrame(data1.get("data", []))
+                        month_df2 = pd.DataFrame(data2.get("data", []))
+
+                        if month_df1.empty or month_df2.empty:
+                            st.warning("いずれかの月期間でデータが見つかりませんでした。")
+                        else:
+                            for df in [month_df1, month_df2]:
+                                df['date'] = pd.to_datetime(df['date'])
+                                df.set_index('date', inplace=True)
+
+                            st.header("表示回数（screenPageViews）月間比較")
+
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.subheader(f"期間1: {month_start_date1} ～ {month_end_date1}")
+                                st.metric("合計表示回数", f"{month_df1['pageViews'].sum():,}")
+                                st.line_chart(month_df1[["pageViews"]])
+
+                            with col2:
+                                st.subheader(f"期間2: {month_start_date2} ～ {month_end_date2}")
+                                st.metric("合計表示回数", f"{month_df2['pageViews'].sum():,}")
+                                st.line_chart(month_df2[["pageViews"]])
+
+                            st.subheader("2月期間の比較")
+                            diff_views = month_df1['pageViews'].sum() - month_df2['pageViews'].sum()
+                            ratio_views = (month_df1['pageViews'].sum() / month_df2['pageViews'].sum() * 100) if month_df2['pageViews'].sum() else 0
+
+                            st.write(f"表示回数差分: {diff_views:+,}　（期間1 - 期間2）")
+                            st.write(f"表示回数比率: {ratio_views:.2f}%")
+
+                            with st.expander("期間1月データ"):
+                                st.dataframe(month_df1)
+                            with st.expander("期間2月データ"):
+                                st.dataframe(month_df2)
 
                 except requests.exceptions.RequestException as e:
                     st.error(f"バックエンドへの接続に失敗しました: {e}")
