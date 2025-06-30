@@ -1,0 +1,8 @@
+fastapi
+google-analytics-data
+google-oauth
+pydantic
+python-dotenv
+streamlit
+requests
+pandas
