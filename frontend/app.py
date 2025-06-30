@@ -8,8 +8,8 @@ BACKEND_URL = "http://127.0.0.1:8000/api/v1/active-users"
 
 PAGE_VIEW_URL = "http://127.0.0.1:8000/api/v1/page-views"
 
-st.set_page_config(page_title="GA4 アクティブユーザー数ダッシュボード", layout="wide")
-st.title("GA4 アクティブユーザー数ダッシュボード")
+st.set_page_config(page_title="がくそんダッシュボード", layout="wide")
+st.title("がくそんダッシュボード")
 
 st.sidebar.header("比較する2つの期間を選択")
 
@@ -32,8 +32,8 @@ def week_ui_and_logic():
     week_selected_date2 = st.sidebar.date_input("期間2の基準日（週）", value=default2_end, key="week_date2_only")
 
     def week_period(selected_date):
-        start_date = selected_date - timedelta(days=6)
-        end_date = selected_date
+        start_date = selected_date
+        end_date = selected_date + timedelta(days=6)
         return start_date, end_date
 
     week_start_date1, week_end_date1 = week_period(week_selected_date1)
@@ -73,7 +73,7 @@ def week_ui_and_logic():
                                 df['date'] = pd.to_datetime(df['date'])
                                 df.set_index('date', inplace=True)
 
-                            st.header("アクティブユーザー数（7日）週比較")
+                            st.header("アクティブユーザー数週比較")
 
                             col1, col2 = st.columns(2)
                             with col1:
@@ -117,7 +117,7 @@ def week_ui_and_logic():
                                 df['date'] = pd.to_datetime(df['date'])
                                 df.set_index('date', inplace=True)
 
-                            st.header("表示回数（screenPageViews）週比較")
+                            st.header("表示回数週比較")
 
                             col1, col2 = st.columns(2)
                             with col1:
@@ -194,7 +194,7 @@ def month_ui_and_logic():
                                 df['date'] = pd.to_datetime(df['date'])
                                 df.set_index('date', inplace=True)
 
-                            st.header("アクティブユーザー数月間（28日）比較")
+                            st.header("アクティブユーザー数月間比較")
 
                             col1, col2 = st.columns(2)
                             with col1:
@@ -238,7 +238,7 @@ def month_ui_and_logic():
                                 df['date'] = pd.to_datetime(df['date'])
                                 df.set_index('date', inplace=True)
 
-                            st.header("表示回数（screenPageViews）月間比較")
+                            st.header("表示回数月間比較")
 
                             col1, col2 = st.columns(2)
                             with col1:
