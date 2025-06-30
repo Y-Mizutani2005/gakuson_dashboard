@@ -97,8 +97,8 @@ def display_page_views(df1, df2, start_date1, end_date1, start_date2, end_date2,
 
 # --- メイン処理 ---
 def main():
-    st.set_page_config(page_title="がくそんダッシュボード", layout="wide")
-    st.title("がくそんダッシュボード")
+    st.set_page_config(page_title="がくそんダッシュボードv1", layout="wide")
+    st.title("がくそんダッシュボードv1")
 
     st.sidebar.header("比較する2つの期間を選択")
     input_mode = st.sidebar.selectbox("集計単位", ["週", "月"], key="input_mode")
