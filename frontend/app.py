@@ -3,6 +3,20 @@ import requests
 import pandas as pd
 from datetime import date, timedelta
 
+
+@st.dialog("日付エラー")
+def future_date_error():
+    st.write("終了日が未来の日付です。本日以前を選択してください。")
+    if st.button("OK"):
+        st.rerun()
+
+@st.dialog("期間エラー")
+def invalid_period_error():
+    st.write("期間の開始日は終了日より前に設定してください。")
+    if st.button("OK"):
+        st.rerun()
+
+
 # バックエンドAPIのURL
 BACKEND_URL = "http://127.0.0.1:8000/api/v1/active-users"
 
@@ -40,8 +54,10 @@ def week_ui_and_logic():
     week_start_date2, week_end_date2 = week_period(week_selected_date2)
 
     if st.sidebar.button("週データ表示", key="week_button_only"):
-        if week_end_date1 > today or week_end_date2 > today:
-            st.error("エラー: 終了日が未来の日付です。本日以前を選択してください。")
+        if week_start_date1 > week_end_date1 or week_start_date2 > week_end_date2:
+            invalid_period_error()
+        elif week_end_date1 > today or week_end_date2 > today:
+            future_date_error()
         else:
             with st.spinner('週データを取得しています...'):
                 try:
@@ -151,8 +167,10 @@ def month_ui_and_logic():
     month_start_date2, month_end_date2 = month_period(month_selected_date2)
 
     if st.sidebar.button("月データ表示", key="month_button_only"):
-        if month_end_date1 > today or month_end_date2 > today:
-            st.error("エラー: 終了日が未来の日付です。本日以前を選択してください。")
+        if month_start_date1 > month_end_date1 or month_start_date2 > month_end_date2:
+            invalid_period_error()
+        elif month_end_date1 > today or month_end_date2 > today:
+            future_date_error()
         else:
             with st.spinner('月データを取得しています...'):
                 try:
