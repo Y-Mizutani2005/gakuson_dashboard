@@ -4,8 +4,8 @@ import pandas as pd
 from datetime import date, timedelta
 
 # --- 定数 ---
-BACKEND_URL = "http://127.0.0.1:8000/api/v1/active-users"
-PAGE_VIEW_URL = "http://127.0.0.1:8000/api/v1/page-views"
+BACKEND_URL = "https://gakuson-dashboard.onrender.com/api/v1/active-users"
+PAGE_VIEW_URL = "https://gakuson-dashboard.onrender.com/api/v1/page-views"
 TODAY = date.today()
 
 # --- エラーダイアログ ---
